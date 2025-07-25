@@ -1,12 +1,27 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Moon, Sun, Calendar, Globe, Star, StarOff, ChevronLeft, ChevronRight, Clock } from "lucide-react"
-import { useTheme } from "next-themes"
+"use client";
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Moon,
+  Sun,
+  Calendar,
+  Globe,
+  Star,
+  StarOff,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+} from "lucide-react";
+import { useTheme } from "next-themes";
 
 const HIJRI_MONTHS = {
   en: [
@@ -37,7 +52,7 @@ const HIJRI_MONTHS = {
     "ذو القعدة",
     "ذو الحجة",
   ],
-}
+};
 
 const GREGORIAN_MONTHS = {
   en: [
@@ -54,241 +69,341 @@ const GREGORIAN_MONTHS = {
     "November",
     "December",
   ],
-  ar: ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"],
-}
+  ar: [
+    "يناير",
+    "فبراير",
+    "مارس",
+    "أبريل",
+    "مايو",
+    "يونيو",
+    "يوليو",
+    "أغسطس",
+    "سبتمبر",
+    "أكتوبر",
+    "نوفمبر",
+    "ديسمبر",
+  ],
+};
 
 const WEEKDAYS_SHORT = {
   en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
   ar: ["أحد", "اثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"],
-}
+};
 
 const WEEKDAYS_FULL = {
-  en: ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+  en: [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+  ],
   ar: ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"],
-}
+};
 
-const ARABIC_NUMERALS = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"]
+const ARABIC_NUMERALS = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
 
 function toArabicNumerals(num: number): string {
   return num
     .toString()
     .split("")
     .map((digit) => ARABIC_NUMERALS[Number.parseInt(digit)])
-    .join("")
+    .join("");
 }
 
 function formatNumber(num: number, language: "en" | "ar"): string {
-  return language === "ar" ? toArabicNumerals(num) : num.toString()
+  return language === "ar" ? toArabicNumerals(num) : num.toString();
 }
 
 function gregorianToHijri(date: Date) {
-  const gYear = date.getFullYear()
-  const gMonth = date.getMonth() + 1
-  const gDay = date.getDate()
+  const gYear = date.getFullYear();
+  const gMonth = date.getMonth() + 1;
+  const gDay = date.getDate();
 
-  let hYear = Math.floor((gYear - 622) * 1.030684 + 0.5)
-  let hMonth = Math.floor((gMonth - 1) * 0.970224 + 1)
-  let hDay = Math.floor(gDay * 0.970224)
+  const a = Math.floor((14 - gMonth) / 12);
+  const y = gYear + 4800 - a;
+  const m = gMonth + 12 * a - 3;
+  const jd =
+    gDay +
+    Math.floor((153 * m + 2) / 5) +
+    365 * y +
+    Math.floor(y / 4) -
+    Math.floor(y / 100) +
+    Math.floor(y / 400) -
+    32045;
 
-  if (hMonth > 12) {
-    hMonth = hMonth - 12
-    hYear++
+  const jdHijriStart = 1948440;
+  const daysSinceHijri = jd - jdHijriStart;
+  const cycle = Math.floor(daysSinceHijri / 10631);
+  const daysInCycle = daysSinceHijri % 10631;
+  let hYear = cycle * 30 + Math.floor(daysInCycle / 354.367) + 1;
+  let remainingDays =
+    daysInCycle - Math.floor((hYear - 1 - cycle * 30) * 354.1);
+
+  let hMonth = 1;
+  let hDay = Math.floor(remainingDays + 0.5);
+  while (hDay > getHijriDaysInMonth(hYear, hMonth)) {
+    hDay -= getHijriDaysInMonth(hYear, hMonth);
+    hMonth++;
+    if (hMonth > 12) {
+      hMonth = 1;
+      hYear++;
+    }
   }
-  if (hMonth < 1) {
-    hMonth = hMonth + 12
-    hYear--
-  }
-  if (hDay < 1) hDay = 1
-  if (hDay > 30) hDay = 30
 
-  return { year: hYear, month: hMonth, day: hDay }
+  if (hDay < 1) {
+    hMonth--;
+    if (hMonth < 1) {
+      hMonth = 12;
+      hYear--;
+    }
+    hDay += getHijriDaysInMonth(hYear, hMonth);
+  }
+
+  return { year: hYear, month: hMonth, day: hDay };
 }
 
 function hijriToGregorian(hYear: number, hMonth: number, hDay: number) {
-  const gYear = Math.floor((hYear - 1) / 1.030684 + 622)
-  const gMonth = Math.floor((hMonth - 1) / 0.970224 + 1)
-  const gDay = Math.floor(hDay / 0.970224)
+  const cycle = Math.floor((hYear - 1) / 30);
+  const yearInCycle = (hYear - 1) % 30;
+  let days = Math.floor(cycle * 10631 + yearInCycle * 354.1);
+  for (let m = 1; m < hMonth; m++) {
+    days += getHijriDaysInMonth(hYear, m);
+  }
+  days += hDay;
+  const jd = days + 1948440;
 
-  return new Date(gYear, gMonth - 1, gDay)
+  const l = jd + 68569;
+  const n = Math.floor((4 * l) / 146097);
+  const l2 = l - Math.floor((146097 * n + 3) / 4);
+  const y = Math.floor((4000 * (l2 + 1)) / 1461001);
+  const l3 = l2 - Math.floor((1461 * y) / 4) + 31;
+  const m = Math.floor((80 * l3) / 2447);
+  const d = l3 - Math.floor((2447 * m) / 80);
+  const l4 = Math.floor(m / 11);
+  const gMonth = m + 2 - 12 * l4;
+  const gYear = 100 * (n - 49) + y + l4;
+  const gDay = Math.floor(d);
+
+  return new Date(gYear, gMonth - 1, gDay);
 }
 
 function getHijriDaysInMonth(year: number, month: number): number {
-  const monthLengths = [30, 29, 30, 29, 30, 29, 30, 29, 30, 29, 30, 29]
-  return monthLengths[month - 1]
+  const monthLengths = [30, 29, 30, 29, 30, 29, 30, 29, 30, 29, 30, 29];
+  let days = monthLengths[month - 1];
+  if (
+    month === 12 &&
+    (year % 30 === 2 ||
+      year % 30 === 7 ||
+      year % 30 === 10 ||
+      year % 30 === 13 ||
+      year % 30 === 15 ||
+      year % 30 === 18 ||
+      year % 30 === 21 ||
+      year % 30 === 24 ||
+      year % 30 === 26 ||
+      year % 30 === 29)
+  ) {
+    days = 30;
+  }
+  return days;
 }
 
 function formatDateKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function isToday(date: Date): boolean {
-  const today = new Date()
-  return date.toDateString() === today.toDateString()
+  const today = new Date();
+  return date.toDateString() === today.toDateString();
 }
 
 function getDaysInMonth(year: number, month: number): number {
-  return new Date(year, month + 1, 0).getDate()
+  return new Date(year, month + 1, 0).getDate();
 }
 
 function getFirstDayOfMonth(year: number, month: number): number {
-  return new Date(year, month, 1).getDay()
+  return new Date(year, month, 1).getDay();
 }
 
 export default function TimelyoCalendar() {
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const [currentHijriDate, setCurrentHijriDate] = useState(() => gregorianToHijri(new Date()))
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
-  const [calendarType, setCalendarType] = useState<"gregorian" | "hijri">("gregorian")
-  const [language, setLanguage] = useState<"en" | "ar">("en")
-  const [markedDates, setMarkedDates] = useState<Set<string>>(new Set())
-  const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-  const [currentTime, setCurrentTime] = useState(new Date())
-  const [showYearPicker, setShowYearPicker] = useState(false)
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentHijriDate, setCurrentHijriDate] = useState(() =>
+    gregorianToHijri(new Date())
+  );
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [calendarType, setCalendarType] = useState<"gregorian" | "hijri">(
+    "gregorian"
+  );
+  const [language, setLanguage] = useState<"en" | "ar">("en");
+  const [markedDates, setMarkedDates] = useState<Set<string>>(new Set());
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [showYearPicker, setShowYearPicker] = useState(false);
 
   const generateYearOptions = () => {
-    const currentYear = calendarType === "gregorian" ? new Date().getFullYear() : gregorianToHijri(new Date()).year
-    const years = []
+    const currentYear =
+      calendarType === "gregorian"
+        ? new Date().getFullYear()
+        : gregorianToHijri(new Date()).year;
+    const years = [];
     for (let year = currentYear - 100; year <= currentYear + 10; year++) {
-      years.push(year)
+      years.push(year);
     }
-    return years
-  }
+    return years;
+  };
 
   const handleYearChange = (year: number) => {
     if (calendarType === "gregorian") {
-      const newDate = new Date(currentDate)
-      newDate.setFullYear(year)
-      setCurrentDate(newDate)
+      const newDate = new Date(currentDate);
+      newDate.setFullYear(year);
+      setCurrentDate(newDate);
     } else {
-      const newHijriDate = { ...currentHijriDate, year }
-      setCurrentHijriDate(newHijriDate)
-      const gregorianEquivalent = hijriToGregorian(newHijriDate.year, newHijriDate.month, 1)
-      setCurrentDate(gregorianEquivalent)
+      const newHijriDate = { ...currentHijriDate, year };
+      setCurrentHijriDate(newHijriDate);
+      const gregorianEquivalent = hijriToGregorian(
+        newHijriDate.year,
+        newHijriDate.month,
+        1
+      );
+      setCurrentDate(gregorianEquivalent);
     }
-    setShowYearPicker(false)
-  }
+    setShowYearPicker(false);
+  };
 
   useEffect(() => {
-    setMounted(true)
-    const savedMarkedDates = localStorage.getItem("timelyo-marked-dates")
-    const savedLanguage = localStorage.getItem("timelyo-language")
-    const savedCalendarType = localStorage.getItem("timelyo-calendar-type")
+    setMounted(true);
+    const savedMarkedDates = localStorage.getItem("timelyo-marked-dates");
+    const savedLanguage = localStorage.getItem("timelyo-language");
+    const savedCalendarType = localStorage.getItem("timelyo-calendar-type");
 
     if (savedMarkedDates) {
-      setMarkedDates(new Set(JSON.parse(savedMarkedDates)))
+      setMarkedDates(new Set(JSON.parse(savedMarkedDates)));
     }
     if (savedLanguage) {
-      setLanguage(savedLanguage as "en" | "ar")
+      setLanguage(savedLanguage as "en" | "ar");
     } else {
-      setLanguage("en")
+      setLanguage("en");
     }
     if (savedCalendarType) {
-      setCalendarType(savedCalendarType as "gregorian" | "hijri")
+      setCalendarType(savedCalendarType as "gregorian" | "hijri");
     }
 
     const timer = setInterval(() => {
-      setCurrentTime(new Date())
-    }, 1000)
+      setCurrentTime(new Date());
+    }, 1000);
 
-    return () => clearInterval(timer)
-  }, [])
-
-  useEffect(() => {
-    if (mounted) {
-      localStorage.setItem("timelyo-marked-dates", JSON.stringify(Array.from(markedDates)))
-    }
-  }, [markedDates, mounted])
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (mounted) {
-      localStorage.setItem("timelyo-language", language)
+      localStorage.setItem(
+        "timelyo-marked-dates",
+        JSON.stringify(Array.from(markedDates))
+      );
     }
-  }, [language, mounted])
+  }, [markedDates, mounted]);
 
   useEffect(() => {
     if (mounted) {
-      localStorage.setItem("timelyo-calendar-type", calendarType)
+      localStorage.setItem("timelyo-language", language);
     }
-  }, [calendarType, mounted])
+  }, [language, mounted]);
+
+  useEffect(() => {
+    if (mounted) {
+      localStorage.setItem("timelyo-calendar-type", calendarType);
+    }
+  }, [calendarType, mounted]);
 
   useEffect(() => {
     if (calendarType === "hijri") {
-      setCurrentHijriDate(gregorianToHijri(currentDate))
+      setCurrentHijriDate(gregorianToHijri(currentDate));
     }
-  }, [calendarType, currentDate])
+  }, [calendarType, currentDate]);
 
-  const hijriDate = gregorianToHijri(selectedDate)
-  const selectedDateKey = formatDateKey(selectedDate)
-  const isSelectedDateMarked = markedDates.has(selectedDateKey)
+  const hijriDate = gregorianToHijri(selectedDate);
+  const selectedDateKey = formatDateKey(selectedDate);
+  const isSelectedDateMarked = markedDates.has(selectedDateKey);
 
   const toggleMarkDate = () => {
-    const newMarkedDates = new Set(markedDates)
+    const newMarkedDates = new Set(markedDates);
     if (isSelectedDateMarked) {
-      newMarkedDates.delete(selectedDateKey)
+      newMarkedDates.delete(selectedDateKey);
     } else {
-      newMarkedDates.add(selectedDateKey)
+      newMarkedDates.add(selectedDateKey);
     }
-    setMarkedDates(newMarkedDates)
-  }
+    setMarkedDates(newMarkedDates);
+  };
 
   const navigateMonth = (direction: "prev" | "next") => {
     if (calendarType === "gregorian") {
-      const newDate = new Date(currentDate)
+      const newDate = new Date(currentDate);
       if (direction === "prev") {
-        newDate.setMonth(newDate.getMonth() - 1)
+        newDate.setMonth(newDate.getMonth() - 1);
       } else {
-        newDate.setMonth(newDate.getMonth() + 1)
+        newDate.setMonth(newDate.getMonth() + 1);
       }
-      setCurrentDate(newDate)
+      setCurrentDate(newDate);
     } else {
-      const newHijriDate = { ...currentHijriDate }
+      const newHijriDate = { ...currentHijriDate };
       if (direction === "prev") {
-        newHijriDate.month -= 1
+        newHijriDate.month -= 1;
         if (newHijriDate.month < 1) {
-          newHijriDate.month = 12
-          newHijriDate.year -= 1
+          newHijriDate.month = 12;
+          newHijriDate.year -= 1;
         }
       } else {
-        newHijriDate.month += 1
+        newHijriDate.month += 1;
         if (newHijriDate.month > 12) {
-          newHijriDate.month = 1
-          newHijriDate.year += 1
+          newHijriDate.month = 1;
+          newHijriDate.year += 1;
         }
       }
-      setCurrentHijriDate(newHijriDate)
-      const gregorianEquivalent = hijriToGregorian(newHijriDate.year, newHijriDate.month, 1)
-      setCurrentDate(gregorianEquivalent)
+      setCurrentHijriDate(newHijriDate);
+      const gregorianEquivalent = hijriToGregorian(
+        newHijriDate.year,
+        newHijriDate.month,
+        1
+      );
+      setCurrentDate(gregorianEquivalent);
     }
-  }
+  };
 
   const goToToday = () => {
-    const today = new Date()
-    setCurrentDate(today)
-    setSelectedDate(today)
+    const today = new Date();
+    setCurrentDate(today);
+    setSelectedDate(today);
     if (calendarType === "hijri") {
-      setCurrentHijriDate(gregorianToHijri(today))
+      setCurrentHijriDate(gregorianToHijri(today));
     }
-  }
+  };
 
   const renderGregorianCalendar = () => {
-    const year = currentDate.getFullYear()
-    const month = currentDate.getMonth()
-    const daysInMonth = getDaysInMonth(year, month)
-    const firstDay = getFirstDayOfMonth(year, month)
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = getDaysInMonth(year, month);
+    const firstDay = getFirstDayOfMonth(year, month);
 
-    const days = []
+    const days = [];
 
     for (let i = 0; i < firstDay; i++) {
-      days.push(<div key={`empty-${i}`} className="aspect-square m-1"></div>)
+      days.push(<div key={`empty-${i}`} className="aspect-square m-1"></div>);
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day)
-      const dateKey = formatDateKey(date)
-      const isTodayDate = isToday(date)
-      const isSelected = selectedDate.toDateString() === date.toDateString()
-      const isMarked = markedDates.has(dateKey)
+      const date = new Date(year, month, day);
+      const dateKey = formatDateKey(date);
+      const isTodayDate = isToday(date);
+      const isSelected = selectedDate.toDateString() === date.toDateString();
+      const isMarked = markedDates.has(dateKey);
 
       days.push(
         <button
@@ -301,7 +416,11 @@ export default function TimelyoCalendar() {
                 ? "bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg scale-105"
                 : "hover:bg-gradient-to-br hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900 dark:hover:to-pink-900 text-gray-700 dark:text-gray-300"
             }
-            ${isTodayDate ? "ring-2 ring-orange-400 ring-offset-2 dark:ring-offset-gray-900" : ""}
+            ${
+              isTodayDate
+                ? "ring-2 ring-orange-400 ring-offset-2 dark:ring-offset-gray-900"
+                : ""
+            }
             ${
               isMarked && !isSelected
                 ? "bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900 dark:to-cyan-900 border-2 border-blue-400"
@@ -310,33 +429,36 @@ export default function TimelyoCalendar() {
           `}
         >
           {formatNumber(day, language)}
-          {isMarked && <Star className="h-3 w-3 absolute -top-1 -right-1 text-yellow-500 fill-current" />}
-        </button>,
-      )
+          {isMarked && (
+            <Star className="h-3 w-3 absolute -top-1 -right-1 text-yellow-500 fill-current" />
+          )}
+        </button>
+      );
     }
 
-    return days
-  }
+    return days;
+  };
 
   const renderHijriCalendar = () => {
-    const year = currentHijriDate.year
-    const month = currentHijriDate.month
-    const daysInMonth = getHijriDaysInMonth(year, month)
-    const firstDayGregorian = hijriToGregorian(year, month, 1)
-    const firstDay = firstDayGregorian.getDay()
+    const year = currentHijriDate.year;
+    const month = currentHijriDate.month;
+    const daysInMonth = getHijriDaysInMonth(year, month);
+    const firstDayGregorian = hijriToGregorian(year, month, 1);
+    const firstDay = firstDayGregorian.getDay();
 
-    const days = []
+    const days = [];
 
     for (let i = 0; i < firstDay; i++) {
-      days.push(<div key={`empty-${i}`} className="aspect-square m-1"></div>)
+      days.push(<div key={`empty-${i}`} className="aspect-square m-1"></div>);
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
-      const gregorianDate = hijriToGregorian(year, month, day)
-      const dateKey = formatDateKey(gregorianDate)
-      const isTodayDate = isToday(gregorianDate)
-      const isSelected = selectedDate.toDateString() === gregorianDate.toDateString()
-      const isMarked = markedDates.has(dateKey)
+      const gregorianDate = hijriToGregorian(year, month, day);
+      const dateKey = formatDateKey(gregorianDate);
+      const isTodayDate = isToday(gregorianDate);
+      const isSelected =
+        selectedDate.toDateString() === gregorianDate.toDateString();
+      const isMarked = markedDates.has(dateKey);
 
       days.push(
         <button
@@ -349,7 +471,11 @@ export default function TimelyoCalendar() {
                 ? "bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg scale-105"
                 : "hover:bg-gradient-to-br hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900 dark:hover:to-pink-900 text-gray-700 dark:text-gray-300"
             }
-            ${isTodayDate ? "ring-2 ring-orange-400 ring-offset-2 dark:ring-offset-gray-900" : ""}
+            ${
+              isTodayDate
+                ? "ring-2 ring-orange-400 ring-offset-2 dark:ring-offset-gray-900"
+                : ""
+            }
             ${
               isMarked && !isSelected
                 ? "bg-gradient-to-br from-blue-100 to-cyan-100 dark:from-blue-900 dark:to-cyan-900 border-2 border-blue-400"
@@ -358,21 +484,25 @@ export default function TimelyoCalendar() {
           `}
         >
           {formatNumber(day, language)}
-          {isMarked && <Star className="h-3 w-3 absolute -top-1 -right-1 text-yellow-500 fill-current" />}
-        </button>,
-      )
+          {isMarked && (
+            <Star className="h-3 w-3 absolute -top-1 -right-1 text-yellow-500 fill-current" />
+          )}
+        </button>
+      );
     }
 
-    return days
-  }
+    return days;
+  };
 
   if (!mounted) {
-    return null
+    return null;
   }
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-pink-900 transition-all duration-500 ${language === "ar" ? "rtl" : "ltr"}`}
+      className={`min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-purple-900 dark:to-pink-900 transition-all duration-500 ${
+        language === "ar" ? "rtl" : "ltr"
+      }`}
     >
       <div className="container mx-auto p-4 max-w-7xl">
         <header className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg rounded-2xl shadow-xl p-6 mb-6 border border-white/20">
@@ -386,7 +516,9 @@ export default function TimelyoCalendar() {
                   Timelyo
                 </h1>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {language === "en" ? "Dual Calendar System" : "نظام التقويم المزدوج"}
+                  {language === "en"
+                    ? "Dual Calendar System"
+                    : "نظام التقويم المزدوج"}
                 </p>
               </div>
             </div>
@@ -395,22 +527,35 @@ export default function TimelyoCalendar() {
               <div className="flex items-center gap-2 bg-white/50 dark:bg-gray-700/50 rounded-lg p-2">
                 <Clock className="h-4 w-4 text-purple-600" />
                 <span className="text-sm font-mono">
-                  {currentTime.toLocaleTimeString(language === "ar" ? "ar-SA" : "en-US")}
+                  {currentTime.toLocaleTimeString(
+                    language === "ar" ? "ar-SA" : "en-US"
+                  )}
                 </span>
               </div>
 
-
-              <Select value={calendarType} onValueChange={(value: "gregorian" | "hijri") => setCalendarType(value)}>
+              <Select
+                value={calendarType}
+                onValueChange={(value: "gregorian" | "hijri") =>
+                  setCalendarType(value)
+                }
+              >
                 <SelectTrigger className="w-36 bg-white/50 dark:bg-gray-700/50 border-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gregorian">{language === "en" ? "Gregorian" : "ميلادي"}</SelectItem>
-                  <SelectItem value="hijri">{language === "en" ? "Hijri" : "هجري"}</SelectItem>
+                  <SelectItem value="gregorian">
+                    {language === "en" ? "Gregorian" : "ميلادي"}
+                  </SelectItem>
+                  <SelectItem value="hijri">
+                    {language === "en" ? "Hijri" : "هجري"}
+                  </SelectItem>
                 </SelectContent>
               </Select>
-              
-              <Select value={language} onValueChange={(value: "en" | "ar") => setLanguage(value)}>
+
+              <Select
+                value={language}
+                onValueChange={(value: "en" | "ar") => setLanguage(value)}
+              >
                 <SelectTrigger className="w-32 bg-white/50 dark:bg-gray-700/50 border-0">
                   <Globe className="h-4 w-4 mr-2" />
                   <SelectValue />
@@ -452,7 +597,9 @@ export default function TimelyoCalendar() {
                         <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
                           {calendarType === "gregorian"
                             ? GREGORIAN_MONTHS[language][currentDate.getMonth()]
-                            : HIJRI_MONTHS[language][currentHijriDate.month - 1]}
+                            : HIJRI_MONTHS[language][
+                                currentHijriDate.month - 1
+                              ]}
                         </h2>
                         <Button
                           variant="ghost"
@@ -460,15 +607,26 @@ export default function TimelyoCalendar() {
                           className="text-2xl font-bold text-gray-800 dark:text-gray-200 hover:bg-purple-100 dark:hover:bg-purple-900 px-2 py-1 h-auto"
                         >
                           {formatNumber(
-                            calendarType === "gregorian" ? currentDate.getFullYear() : currentHijriDate.year,
-                            language,
+                            calendarType === "gregorian"
+                              ? currentDate.getFullYear()
+                              : currentHijriDate.year,
+                            language
                           )}
                         </Button>
                       </div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         {calendarType === "gregorian"
-                          ? `${HIJRI_MONTHS[language][hijriDate.month - 1]} ${formatNumber(hijriDate.year, language)} ${language === "en" ? "AH" : "هـ"}`
-                          : `${GREGORIAN_MONTHS[language][currentDate.getMonth()]} ${formatNumber(currentDate.getFullYear(), language)}`}
+                          ? `${
+                              HIJRI_MONTHS[language][hijriDate.month - 1]
+                            } ${formatNumber(hijriDate.year, language)} ${
+                              language === "en" ? "AH" : "هـ"
+                            }`
+                          : `${
+                              GREGORIAN_MONTHS[language][currentDate.getMonth()]
+                            } ${formatNumber(
+                              currentDate.getFullYear(),
+                              language
+                            )}`}
                       </p>
                     </div>
                     <Button
@@ -480,14 +638,17 @@ export default function TimelyoCalendar() {
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
-                  <Badge variant="secondary" className="bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+                  <Badge
+                    variant="secondary"
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                  >
                     {calendarType === "gregorian"
                       ? language === "en"
                         ? "Gregorian"
                         : "ميلادي"
                       : language === "en"
-                        ? "Hijri"
-                        : "هجري"}
+                      ? "Hijri"
+                      : "هجري"}
                   </Badge>
                 </div>
               </CardHeader>
@@ -503,7 +664,9 @@ export default function TimelyoCalendar() {
                   ))}
                 </div>
                 <div className="grid grid-cols-7 gap-3">
-                  {calendarType === "gregorian" ? renderGregorianCalendar() : renderHijriCalendar()}
+                  {calendarType === "gregorian"
+                    ? renderGregorianCalendar()
+                    : renderHijriCalendar()}
                 </div>
               </CardContent>
             </Card>
@@ -517,7 +680,9 @@ export default function TimelyoCalendar() {
                   onClick={(e) => e.stopPropagation()}
                 >
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-center">{language === "en" ? "Select Year" : "اختر السنة"}</CardTitle>
+                    <CardTitle className="text-center">
+                      {language === "en" ? "Select Year" : "اختر السنة"}
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="p-0">
                     <div className="max-h-80 overflow-y-auto p-4">
@@ -527,7 +692,9 @@ export default function TimelyoCalendar() {
                             key={year}
                             variant={
                               year ===
-                              (calendarType === "gregorian" ? currentDate.getFullYear() : currentHijriDate.year)
+                              (calendarType === "gregorian"
+                                ? currentDate.getFullYear()
+                                : currentHijriDate.year)
                                 ? "default"
                                 : "outline"
                             }
@@ -535,7 +702,9 @@ export default function TimelyoCalendar() {
                             onClick={() => handleYearChange(year)}
                             className={`${
                               year ===
-                              (calendarType === "gregorian" ? currentDate.getFullYear() : currentHijriDate.year)
+                              (calendarType === "gregorian"
+                                ? currentDate.getFullYear()
+                                : currentHijriDate.year)
                                 ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
                                 : "hover:bg-purple-100 dark:hover:bg-purple-900"
                             }`}
@@ -555,7 +724,9 @@ export default function TimelyoCalendar() {
             <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg border-white/20 shadow-xl">
               <CardHeader>
                 <CardTitle className="flex items-center justify-between text-lg">
-                  <span>{language === "en" ? "Selected Date" : "التاريخ المحدد"}</span>
+                  <span>
+                    {language === "en" ? "Selected Date" : "التاريخ المحدد"}
+                  </span>
                   {isToday(selectedDate) && (
                     <Badge className="bg-gradient-to-r from-orange-400 to-red-400 text-white text-xs">
                       {language === "en" ? "Today" : "اليوم"}
@@ -602,15 +773,19 @@ export default function TimelyoCalendar() {
 
             <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg border-white/20 shadow-xl">
               <CardHeader>
-                <CardTitle className="text-lg">{language === "en" ? "Hijri Date" : "التاريخ الهجري"}</CardTitle>
+                <CardTitle className="text-lg">
+                  {language === "en" ? "Hijri Date" : "التاريخ الهجري"}
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-center p-4 bg-gradient-to-br from-green-100 to-emerald-100 dark:from-green-900 dark:to-emerald-900 rounded-xl">
                   <div className="text-xl font-bold text-green-800 dark:text-green-200">
-                    {formatNumber(hijriDate.day, language)} {HIJRI_MONTHS[language][hijriDate.month - 1]}
+                    {formatNumber(hijriDate.day, language)}{" "}
+                    {HIJRI_MONTHS[language][hijriDate.month - 1]}
                   </div>
                   <div className="text-lg font-semibold text-green-700 dark:text-green-300">
-                    {formatNumber(hijriDate.year, language)} {language === "en" ? "AH" : "هـ"}
+                    {formatNumber(hijriDate.year, language)}{" "}
+                    {language === "en" ? "AH" : "هـ"}
                   </div>
                 </div>
               </CardContent>
@@ -618,7 +793,9 @@ export default function TimelyoCalendar() {
 
             <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg border-white/20 shadow-xl">
               <CardHeader>
-                <CardTitle className="text-lg">{language === "en" ? "Quick Actions" : "إجراءات سريعة"}</CardTitle>
+                <CardTitle className="text-lg">
+                  {language === "en" ? "Quick Actions" : "إجراءات سريعة"}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Button
@@ -633,8 +810,13 @@ export default function TimelyoCalendar() {
                   <div className="text-center p-3 bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900 dark:to-yellow-900 rounded-lg">
                     <div className="text-sm font-semibold text-amber-800 dark:text-amber-200">
                       {language === "en"
-                        ? `${markedDates.size} marked date${markedDates.size > 1 ? "s" : ""}`
-                        : `${formatNumber(markedDates.size, language)} تاريخ محفوظ`}
+                        ? `${markedDates.size} marked date${
+                            markedDates.size > 1 ? "s" : ""
+                          }`
+                        : `${formatNumber(
+                            markedDates.size,
+                            language
+                          )} تاريخ محفوظ`}
                     </div>
                   </div>
                 )}
@@ -654,5 +836,5 @@ export default function TimelyoCalendar() {
         </footer>
       </div>
     </div>
-  )
+  );
 }
